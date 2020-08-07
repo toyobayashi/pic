@@ -1,0 +1,15 @@
+{
+  "name": "@tybys/pic",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "keywords": [],
+  "bin": {
+    "pic": "./bin/pic.js"
+  },
+  "author": "toyobayashi",
+  "license": "MIT",
+  "dependencies": {
+    "tinify": "^1.6.0-beta.2"
+  }
+}
