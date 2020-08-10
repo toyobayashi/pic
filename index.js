@@ -1,6 +1,8 @@
 const tinify = require("tinify")
 const path = require('path')
 const fs = require('fs')
+const { TaskList, Task } = require("./lib/task")
+const Progress = require('./lib/progress.js')
 
 const supportType = ['.png', '.jpg', '.jpeg']
 
@@ -27,17 +29,29 @@ function walkDir (inputDir, outputDir) {
   return src
 }
 
-async function compressFile (input, output) {
-  console.log(`Compress "${input}" to "${output}"`)
-  const dir = path.dirname(output)
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true })
+class CompressTask extends Task {
+  constructor (input, output) {
+    super()
+    this.input = input
+    this.output = output
   }
-  const source = tinify.fromFile(input)
-  await source.toFile(output)
+
+  execute () {
+    const { input, output } = this
+    const dir = path.dirname(output)
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true })
+    }
+    const source = tinify.fromFile(input)
+    return source.toFile(output).then(() => {
+      this.emitSuccess()
+    }).catch(err => {
+      this.emitFail(err)
+    })
+  }
 }
 
-async function compress (input, output) {
+function compress (input, output) {
   if (!fs.existsSync(input)) {
     throw new Error(`Input does not exist: ${input}`)
   }
@@ -48,16 +62,40 @@ async function compress (input, output) {
     if (fs.existsSync(output) && !fs.statSync(output).isDirectory()) {
       throw new Error(`Output is not a directory: ${output}`)
     }
-    for (let i = 0; i < items.length; i++) {
-      await compressFile(items[i].input, items[i].output)
+    const p = new Progress()
+    const total = items.length
+    let done = -1
+    const WIDTH = 60
+    const render = () => {
+      done++
+      p.render({
+        title: `${done} / ${total}`,
+        percent: 100 * done / total,
+        width: WIDTH
+      })
     }
+    render()
+    return new TaskList(items.map(item => {
+      const task = new CompressTask(item.input, item.output)
+      task.on('success', render)
+      task.on('fail', (err) => {
+        console.error(err)
+        render()
+      })
+      return task
+    })).promise().then(() => {
+      p.dispose()
+      console.log('Done.')
+    })
   } else {
     if (supportType.includes(path.extname(input))) {
       if (fs.existsSync(output) && fs.statSync(output).isDirectory()) {
         throw new Error(`Output is a directory: ${output}`)
       }
-  
-      await compressFile(input, output)
+      
+      return new TaskList([new CompressTask(input, output)]).promise().then(() => {
+        console.log('Done.')
+      })
     }
   }
 }
